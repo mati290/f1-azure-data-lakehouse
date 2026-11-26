@@ -221,3 +221,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project secrets
+.env.*
+!.env.example
+.databrickscfg
+
+# Local data
+data/raw/
+data/processed/
