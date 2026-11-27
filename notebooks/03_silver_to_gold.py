@@ -1123,14 +1123,6 @@ def validate_idempotency(table_name):
 
 # COMMAND ----------
 
-for table_name in GOLD_TABLES:
-
-    validate_idempotency(table_name)
-
-print("Gold full refresh idempotency: PASSED")
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC
 # MAGIC ## 18. Optional Full Refresh Idempotency Test
