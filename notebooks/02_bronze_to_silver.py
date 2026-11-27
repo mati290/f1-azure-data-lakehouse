@@ -1,5 +1,15 @@
 # Databricks notebook source
 # MAGIC %md
+# MAGIC
+# MAGIC
+# MAGIC # Bronze to Silver Transformations
+# MAGIC
+# MAGIC Formula 1 race results processing with PySpark,
+# MAGIC Delta Lake and Unity Catalog.
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 1. Configuration
 # MAGIC Import required PySpark modules and define source and target storage locations.
 
@@ -821,7 +831,7 @@ assert (
 assert df_final.exceptAll(df_silver).count() == 0
 assert df_silver.exceptAll(df_final).count() == 0
 
-print("Idempotency validation: PASSED")
+print("Silver content consistency validation: PASSED")
 
 display(
     spark.sql(f"DESCRIBE HISTORY {SILVER_TABLE}")
