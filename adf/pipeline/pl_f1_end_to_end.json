@@ -1,0 +1,122 @@
+{
+	"name": "pl_f1_end_to_end",
+	"properties": {
+		"description": "Orchestrates F1 race results ingestion, data validation, lakehouse transformations and analytics deployment.",
+		"activities": [
+			{
+				"name": "execute_bronze_ingestion",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "validate_input_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_ingest_jolpica_all_seasons",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"seasons": "@pipeline().parameters.seasons",
+						"limit": 100
+					}
+				}
+			},
+			{
+				"name": "execute_lakehouse_job",
+				"type": "DatabricksJob",
+				"dependsOn": [
+					{
+						"activity": "execute_bronze_ingestion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"jobId": "512717574345116"
+				},
+				"linkedServiceName": {
+					"referenceName": "ls_databricks_f1",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "filter_invalid_seasons",
+				"type": "Filter",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.seasons",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@not(contains(createArray('2021','2022','2023','2024','2025'),item()))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "validate_input_parameters",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "filter_invalid_seasons",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(\n    greater(length(pipeline().parameters.seasons),0),\n    and(\n        equals(length(activity('filter_invalid_seasons').output.Value),0),\n        equals(\n            length(pipeline().parameters.seasons),\n            length(union(pipeline().parameters.seasons,pipeline().parameters.seasons))\n        )\n    )\n)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "fail_invalid_parameters",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Seasons must be a non-empty array of unique values between 2021 and 2025.",
+								"errorCode": "INVALID_PARAMETERS"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"seasons": {
+				"type": "array",
+				"defaultValue": [
+					"2021",
+					"2022",
+					"2023",
+					"2024",
+					"2025"
+				]
+			}
+		},
+		"annotations": []
+	}
+}
