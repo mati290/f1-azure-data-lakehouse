@@ -1,0 +1,13 @@
+{
+	"name": "ls_databricks_f1",
+	"properties": {
+		"description": "Connection to Azure Databricks for F1 lakehouse orchestration using managed identity.",
+		"annotations": [],
+		"type": "AzureDatabricks",
+		"typeProperties": {
+			"domain": "https://adb-7405619567427506.6.azuredatabricks.net",
+			"authentication": "MSI",
+			"workspaceResourceId": "/subscriptions/610f4bc6-1115-4205-b954-6b73a9b6d4de/resourceGroups/rg-f1-dev/providers/Microsoft.Databricks/workspaces/dbw-f1-dev"
+		}
+	}
+}
