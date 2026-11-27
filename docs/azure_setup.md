@@ -13,7 +13,7 @@ The environment is designed for educational and portfolio purposes, with an emph
 | Subscription | Azure for Students | N/A |
 | Resource Group | rg-f1-dev | West Europe |
 | Storage Account | stf1lakehouse290 | West Europe |
-| Data Factory | adf-f1-dev-290 | West Europe |
+| Data Factory | adf-f1-dev-290 | Poland Central |
 | Databricks Workspace | dbw-f1-dev | Germany West Central |
 | Access Connector | ac-dbw-f1-dev | West Europe |
 | Budget | budget-f1-dev | N/A |
