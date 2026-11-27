@@ -232,4 +232,68 @@ The analytics implementation demonstrates the following SQL techniques:
 | GROUP BY | Business metric aggregation |
 | Common Table Expressions | Structuring analytical queries |
 | ROW_NUMBER | Ranking and recent race selection |
-| LAG | Previous-season
+| LAG | Previous-season comparisons |
+| COUNT DISTINCT | Counting unique races and drivers |
+| COUNT_IF | Conditional metric aggregation |
+| CASE WHEN | Business rules and conditional calculations |
+| TRY_DIVIDE | Safe division |
+| UNION ALL | Consolidated view validation |
+| Null-safe equality | Validation involving nullable values |
+| CREATE OR REPLACE VIEW | Repeatable analytical view deployment |
+
+## 10. Data Quality and Validation
+
+The SQL notebook includes validation queries covering:
+
+- Analytical view availability.
+- Record count and race point reconciliation.
+- Business key uniqueness.
+- Ranking sequence consistency.
+- Business metric ranges.
+- Race entry and start consistency.
+- Win and podium consistency.
+- Positions gained reconciliation.
+- Year-over-year calculation rules.
+
+Validation queries return PASSED or FAILED statuses for manual inspection.
+
+Automated data quality testing will be implemented in F09.
+
+## 11. Manual Business Validation
+
+A manual reconciliation example compares Max Verstappen's Silverstone race results directly from the Gold tables with the aggregated driver circuit performance view.
+
+The comparison covers race starts, total points, average points per start, average finishing position, wins and podiums.
+
+## 12. Execution Instructions
+
+Source file: `sql/04_sql_business_analytics.sql`
+
+1. Ensure that the Gold dimensional model exists.
+2. Import the SQL source into Azure Databricks.
+3. Select a compatible compute environment.
+4. Execute the notebook cells in order.
+5. Verify all six analytical views.
+6. Review validation query results.
+
+CREATE OR REPLACE VIEW statements support repeatable deployment.
+
+## 13. Design Decisions and Limitations
+
+- Standard SQL views are used instead of materialized views.
+- Business logic is centralized in reusable analytical views.
+- Rankings include sample-size thresholds.
+- Ranking metrics are rounded to two decimal places.
+- Race status definitions are inherited from Silver.
+- Constructor identities follow source system identifiers.
+- Sprint results and qualifying data are excluded.
+- Historical results do not isolate driver ability from car performance.
+- Validation queries currently require manual inspection.
+- Dynamic dashboard filtering will be implemented in F10.
+
+## 14. Next Steps
+
+- F08: End-to-end pipeline orchestration.
+- F09: Automated data quality tests and basic CI.
+- F10: Streamlit dashboard.
+- F11: Portfolio documentation.
