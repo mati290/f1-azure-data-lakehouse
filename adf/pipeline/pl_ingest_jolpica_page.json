@@ -1,0 +1,78 @@
+{
+	"name": "pl_ingest_jolpica_page",
+	"properties": {
+		"description": "Ingest a single page of Jolpica F1 race results into the Bronze layer",
+		"activities": [
+			{
+				"name": "copy_jolpica_page",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "HttpReadSettings",
+							"requestMethod": "GET"
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_http_jolpica_raw",
+						"type": "DatasetReference",
+						"parameters": {
+							"season": "@pipeline().parameters.season",
+							"limit": "@pipeline().parameters.limit",
+							"offset": "@pipeline().parameters.offset"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ds_adls_bronze_raw",
+						"type": "DatasetReference",
+						"parameters": {
+							"season": "@pipeline().parameters.season",
+							"offset": "@pipeline().parameters.offset"
+						}
+					}
+				]
+			}
+		],
+		"parameters": {
+			"season": {
+				"type": "string",
+				"defaultValue": "2025"
+			},
+			"limit": {
+				"type": "int",
+				"defaultValue": 100
+			},
+			"offset": {
+				"type": "int",
+				"defaultValue": 0
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-11-27T12:08:26Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,68 @@
+{
+	"name": "pl_ingest_jolpica_all_seasons",
+	"properties": {
+		"description": "Ingest historical F1 race results for multiple seasons.",
+		"activities": [
+			{
+				"name": "foreach_season",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.seasons",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "execute_ingest_season",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_ingest_jolpica_season",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"season": {
+										"value": "@item()",
+										"type": "Expression"
+									},
+									"limit": {
+										"value": "@pipeline().parameters.limit",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"seasons": {
+				"type": "array",
+				"defaultValue": [
+					"2021",
+					"2022",
+					"2023",
+					"2024",
+					"2025"
+				]
+			},
+			"limit": {
+				"type": "int",
+				"defaultValue": 100
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-11-27T12:08:28Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

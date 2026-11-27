@@ -1,0 +1,258 @@
+{
+	"name": "pl_ingest_jolpica_season",
+	"properties": {
+		"description": "Ingest all pages of Jolpica F1 race results for a given season.",
+		"activities": [
+			{
+				"name": "web_get_season_metadata",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat('https://api.jolpi.ca/ergast/f1/', pipeline().parameters.season, '/results/?limit=1&offset=0')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "set_total",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "web_get_season_metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "total",
+					"value": {
+						"value": "@int(activity('web_get_season_metadata').output.MRData.total)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "until_all_pages_downloaded",
+				"description": "Download all pages until the total record count is reached.",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "set_total",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n    greaterOrEquals(variables('offset'), variables('total')),\n    variables('has_error')\n)",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "execute_ingest_page",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_ingest_jolpica_page",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"season": {
+										"value": "@pipeline().parameters.season",
+										"type": "Expression"
+									},
+									"limit": {
+										"value": "@pipeline().parameters.limit",
+										"type": "Expression"
+									},
+									"offset": {
+										"value": "@variables('offset')",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "wait_api",
+							"type": "Wait",
+							"dependsOn": [
+								{
+									"activity": "execute_ingest_page",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 2
+							}
+						},
+						{
+							"name": "set_next_offset",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "wait_api",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "next_offset",
+								"value": {
+									"value": "@add(variables('offset'), pipeline().parameters.limit)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_offset",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "set_next_offset",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "offset",
+								"value": {
+									"value": "@variables('next_offset')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_ingestion_error",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "execute_ingest_page",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "has_error",
+								"value": {
+									"value": "@bool('true')",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"timeout": "0.00:10:00"
+				}
+			},
+			{
+				"name": "if_ingestion_failed",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "until_all_pages_downloaded",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@variables('has_error')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "fail_ingestion",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat(     'Failed to ingest season ',     pipeline().parameters.season,     ' at offset ',     string(variables('offset')) )",
+									"type": "Expression"
+								},
+								"errorCode": "INGESTION_FAILED"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"season": {
+				"type": "string",
+				"defaultValue": "2025"
+			},
+			"limit": {
+				"type": "int",
+				"defaultValue": 100
+			}
+		},
+		"variables": {
+			"offset": {
+				"type": "Integer",
+				"defaultValue": 0
+			},
+			"total": {
+				"type": "Integer",
+				"defaultValue": 0
+			},
+			"next_offset": {
+				"type": "Integer",
+				"defaultValue": 0
+			},
+			"has_error": {
+				"type": "Boolean",
+				"defaultValue": false
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-11-27T12:08:27Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
