@@ -1,0 +1,709 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-f1-dev-290"
+		},
+		"ls_adls_gen2_f1_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://stf1lakehouse290.dfs.core.windows.net/"
+		},
+		"ls_http_jolpica_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://api.jolpi.ca/ergast/f1/"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_adls_gen2_f1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('ls_adls_gen2_f1_properties_typeProperties_url')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_databricks_f1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Connection to Azure Databricks for F1 lakehouse orchestration using managed identity.",
+				"annotations": [],
+				"type": "AzureDatabricks",
+				"typeProperties": {
+					"domain": "https://adb-7405619567427506.6.azuredatabricks.net",
+					"authentication": "MSI",
+					"workspaceResourceId": "/subscriptions/610f4bc6-1115-4205-b954-6b73a9b6d4de/resourceGroups/rg-f1-dev/providers/Microsoft.Databricks/workspaces/dbw-f1-dev"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_http_jolpica')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "HTTP connection to Jolpica F1 API",
+				"annotations": [],
+				"type": "HttpServer",
+				"typeProperties": {
+					"url": "[parameters('ls_http_jolpica_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_adls_bronze_raw')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_gen2_f1",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"season": {
+						"type": "string",
+						"defaultValue": "2025"
+					},
+					"offset": {
+						"type": "int",
+						"defaultValue": 0
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@concat('offset_', string(dataset().offset), '.json')",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@concat('jolpica/race_results/season=', dataset().season)",
+							"type": "Expression"
+						},
+						"fileSystem": "bronze"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_gen2_f1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_http_jolpica_raw')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_http_jolpica",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"season": {
+						"type": "string",
+						"defaultValue": "2025"
+					},
+					"limit": {
+						"type": "int",
+						"defaultValue": 100
+					},
+					"offset": {
+						"type": "int",
+						"defaultValue": 0
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "HttpServerLocation",
+						"relativeUrl": {
+							"value": "@concat(\n    dataset().season,\n    '/results/?limit=',\n    string(dataset().limit),\n    '&offset=',\n    string(dataset().offset)\n)",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_http_jolpica')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_ingest_jolpica_page')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Ingest a single page of Jolpica F1 race results into the Bronze layer",
+				"activities": [
+					{
+						"name": "copy_jolpica_page",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.00:10:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "BinarySource",
+								"storeSettings": {
+									"type": "HttpReadSettings",
+									"requestMethod": "GET"
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							},
+							"sink": {
+								"type": "BinarySink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "ds_http_jolpica_raw",
+								"type": "DatasetReference",
+								"parameters": {
+									"season": "@pipeline().parameters.season",
+									"limit": "@pipeline().parameters.limit",
+									"offset": "@pipeline().parameters.offset"
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ds_adls_bronze_raw",
+								"type": "DatasetReference",
+								"parameters": {
+									"season": "@pipeline().parameters.season",
+									"offset": "@pipeline().parameters.offset"
+								}
+							}
+						]
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"season": {
+						"type": "string",
+						"defaultValue": "2025"
+					},
+					"limit": {
+						"type": "int",
+						"defaultValue": 100
+					},
+					"offset": {
+						"type": "int",
+						"defaultValue": 0
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-11-27T12:08:26Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_http_jolpica_raw')]",
+				"[concat(variables('factoryId'), '/datasets/ds_adls_bronze_raw')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_ingest_jolpica_season')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Ingest all pages of Jolpica F1 race results for a given season.",
+				"activities": [
+					{
+						"name": "web_get_season_metadata",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.00:10:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "GET",
+							"headers": {},
+							"url": {
+								"value": "@concat('https://api.jolpi.ca/ergast/f1/', pipeline().parameters.season, '/results/?limit=1&offset=0')",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "set_total",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "web_get_season_metadata",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "total",
+							"value": {
+								"value": "@int(activity('web_get_season_metadata').output.MRData.total)",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "until_all_pages_downloaded",
+						"description": "Download all pages until the total record count is reached.",
+						"type": "Until",
+						"dependsOn": [
+							{
+								"activity": "set_total",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@or(\n    greaterOrEquals(variables('offset'), variables('total')),\n    variables('has_error')\n)",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "execute_ingest_page",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "pl_ingest_jolpica_page",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"season": {
+												"value": "@pipeline().parameters.season",
+												"type": "Expression"
+											},
+											"limit": {
+												"value": "@pipeline().parameters.limit",
+												"type": "Expression"
+											},
+											"offset": {
+												"value": "@variables('offset')",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								{
+									"name": "wait_api",
+									"type": "Wait",
+									"dependsOn": [
+										{
+											"activity": "execute_ingest_page",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 2
+									}
+								},
+								{
+									"name": "set_next_offset",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "wait_api",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "next_offset",
+										"value": {
+											"value": "@add(variables('offset'), pipeline().parameters.limit)",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "set_offset",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "set_next_offset",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "offset",
+										"value": {
+											"value": "@variables('next_offset')",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "set_ingestion_error",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "execute_ingest_page",
+											"dependencyConditions": [
+												"Failed"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "has_error",
+										"value": {
+											"value": "@bool('true')",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"timeout": "0.00:30:00"
+						}
+					},
+					{
+						"name": "if_ingestion_failed",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "until_all_pages_downloaded",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@variables('has_error')",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "fail_ingestion",
+									"type": "Fail",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"message": {
+											"value": "@concat(     'Failed to ingest season ',     pipeline().parameters.season,     ' at offset ',     string(variables('offset')) )",
+											"type": "Expression"
+										},
+										"errorCode": "INGESTION_FAILED"
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"season": {
+						"type": "string",
+						"defaultValue": "2025"
+					},
+					"limit": {
+						"type": "int",
+						"defaultValue": 100
+					}
+				},
+				"variables": {
+					"offset": {
+						"type": "Integer",
+						"defaultValue": 0
+					},
+					"total": {
+						"type": "Integer",
+						"defaultValue": 0
+					},
+					"next_offset": {
+						"type": "Integer",
+						"defaultValue": 0
+					},
+					"has_error": {
+						"type": "Boolean",
+						"defaultValue": false
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-11-27T12:08:27Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pl_ingest_jolpica_page')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_ingest_jolpica_all_seasons')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Ingest historical F1 race results for multiple seasons.",
+				"activities": [
+					{
+						"name": "foreach_season",
+						"type": "ForEach",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@pipeline().parameters.seasons",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "execute_ingest_season",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "pl_ingest_jolpica_season",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"season": {
+												"value": "@item()",
+												"type": "Expression"
+											},
+											"limit": {
+												"value": "@pipeline().parameters.limit",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"seasons": {
+						"type": "array",
+						"defaultValue": [
+							"2021",
+							"2022",
+							"2023",
+							"2024",
+							"2025"
+						]
+					},
+					"limit": {
+						"type": "int",
+						"defaultValue": 100
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-11-27T12:08:28Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pl_ingest_jolpica_season')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_f1_end_to_end')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Orchestrates F1 race results ingestion, data validation, lakehouse transformations and analytics deployment.",
+				"activities": [
+					{
+						"name": "execute_bronze_ingestion",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "validate_input_parameters",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_ingest_jolpica_all_seasons",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"seasons": {
+									"value": "@pipeline().parameters.seasons",
+									"type": "Expression"
+								},
+								"limit": 100
+							}
+						}
+					},
+					{
+						"name": "execute_lakehouse_job",
+						"type": "DatabricksJob",
+						"dependsOn": [
+							{
+								"activity": "execute_bronze_ingestion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"jobId": "512717574345116"
+						},
+						"linkedServiceName": {
+							"referenceName": "ls_databricks_f1",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "filter_invalid_seasons",
+						"type": "Filter",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@pipeline().parameters.seasons",
+								"type": "Expression"
+							},
+							"condition": {
+								"value": "@not(contains(createArray('2021','2022','2023','2024','2025'),item()))",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "validate_input_parameters",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "filter_invalid_seasons",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@and(\n    greater(length(pipeline().parameters.seasons),0),\n    and(\n        equals(length(activity('filter_invalid_seasons').output.Value),0),\n        equals(\n            length(pipeline().parameters.seasons),\n            length(union(pipeline().parameters.seasons,pipeline().parameters.seasons))\n        )\n    )\n)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "fail_invalid_parameters",
+									"type": "Fail",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"message": "Seasons must be a non-empty array of unique values between 2021 and 2025.",
+										"errorCode": "INVALID_PARAMETERS"
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"seasons": {
+						"type": "array",
+						"defaultValue": [
+							"2021",
+							"2022",
+							"2023",
+							"2024",
+							"2025"
+						]
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pl_ingest_jolpica_all_seasons')]",
+				"[concat(variables('factoryId'), '/linkedServices/ls_databricks_f1')]"
+			]
+		}
+	]
+}

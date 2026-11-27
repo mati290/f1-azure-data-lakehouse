@@ -1,0 +1,15 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "adf-f1-dev-290"
+		},
+		"ls_adls_gen2_f1_properties_typeProperties_url": {
+			"value": "https://stf1lakehouse290.dfs.core.windows.net/"
+		},
+		"ls_http_jolpica_properties_typeProperties_url": {
+			"value": "https://api.jolpi.ca/ergast/f1/"
+		}
+	}
+}
