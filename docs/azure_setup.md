@@ -46,7 +46,7 @@ Configuration:
 - Version: V2
 - Integration Runtime: AutoResolveIntegrationRuntime
 - Authentication: System-assigned Managed Identity
-- Linked Service: ls_adls_f1
+- Linked Service:  ls_adls_f1
 - Storage access: Storage Blob Data Contributor scoped to the bronze container
 
 ## Azure Databricks
@@ -164,3 +164,11 @@ Cross-region data transfer and Serverless Compute may generate additional charge
 - Public network endpoints for simplified development
 
 Production deployments should consider additional network isolation, stricter access controls and automated infrastructure provisioning.
+
+## Azure Data Factory Linked Services
+
+| Linked service | Connector | Purpose |
+|---|---|---|
+| `ls_http_jolpica` | HTTP | API ingestion |
+| `ls_adls_gen2_f1` | Azure Data Lake Storage Gen2 | Bronze storage |
+| `ls_adls_f1` | Azure Blob Storage | Initial connectivity testing; unused by ingestion |
