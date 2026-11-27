@@ -1,0 +1,36 @@
+{
+	"name": "ds_adls_bronze_raw",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_adls_gen2_f1",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"season": {
+				"type": "string",
+				"defaultValue": "2025"
+			},
+			"offset": {
+				"type": "int",
+				"defaultValue": 0
+			}
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@concat('offset_', string(dataset().offset), '.json')",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@concat('jolpica/race_results/season=', dataset().season)",
+					"type": "Expression"
+				},
+				"fileSystem": "bronze"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

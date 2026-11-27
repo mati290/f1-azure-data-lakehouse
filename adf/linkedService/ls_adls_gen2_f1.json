@@ -1,0 +1,11 @@
+{
+	"name": "ls_adls_gen2_f1",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://stf1lakehouse290.dfs.core.windows.net/"
+		}
+	}
+}

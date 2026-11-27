@@ -1,0 +1,16 @@
+{
+	"name": "adf-f1-dev-290",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Disabled",
+			"editable": true,
+			"isExplicitlySet": false
+		}
+	},
+	"location": "polandcentral",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "6915b86c-fe18-4f51-98f8-93ec0e1e11c4",
+		"tenantId": "d7954127-f4c6-4379-95dd-7eee5fb3d222"
+	}
+}
