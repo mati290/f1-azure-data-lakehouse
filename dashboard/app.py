@@ -1,6 +1,12 @@
 
 """F1 Performance Analytics dashboard."""
 
+from charts import (
+    create_finish_chart,
+    create_grid_vs_finish_chart,
+    create_points_chart,
+)
+
 import streamlit as st
 
 from analytics import (
@@ -144,6 +150,48 @@ st.caption(
     "DNF rate excludes drivers who did not start."
 )
 
+
+# Performance visualizations
+
+st.divider()
+
+st.subheader("Performance Trends")
+
+chart_col1, chart_col2 = st.columns(2)
+
+with chart_col1:
+    st.plotly_chart(
+        create_points_chart(filtered_df),
+        width="stretch",
+        key="points_chart",
+    )
+
+with chart_col2:
+    if (
+        filtered_df["is_classified"]
+        & filtered_df["finish_position"].notna()
+    ).any():
+        st.plotly_chart(
+            create_finish_chart(filtered_df),
+            width="stretch",
+            key="finish_chart",
+        )
+    else:
+        st.info(
+            "No classified finishing positions "
+            "for the selected races."
+        )
+
+st.plotly_chart(
+    create_grid_vs_finish_chart(filtered_df),
+    width="stretch",
+    key="grid_vs_finish_chart",
+)
+
+st.caption(
+    "Non-classified finishing positions and unavailable "
+    "starting grid positions are shown as gaps."
+)
 
 # Race results preview
 
