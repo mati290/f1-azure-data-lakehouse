@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC
 # MAGIC
@@ -15,8 +19,41 @@
 
 # COMMAND ----------
 
+
+import sys
+from pathlib import Path
+
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
+
+# Resolve the repository root
+repo_root = Path.cwd()
+
+if repo_root.name == "notebooks":
+    repo_root = repo_root.parent
+
+if not (repo_root / "src" / "transformations.py").is_file():
+    raise RuntimeError(
+        f"Project source directory not found in {repo_root}"
+    )
+
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+from src.transformations import (
+    cast_race_results,
+    normalize_strings,
+    deduplicate_records,
+)
+
+from src.data_quality import (
+    BUSINESS_KEY,
+    validate_unique_key,
+    validate_nonnegative_points,
+)
+
+print(f"Repository root: {repo_root}")
+print("Shared modules import: PASSED")
 
 BRONZE_PATH = (
     "abfss://bronze@"
@@ -31,6 +68,7 @@ SILVER_PATH = (
 )
 
 SILVER_TABLE = "f1_lakehouse.silver.race_results"
+
 
 # COMMAND ----------
 
@@ -243,23 +281,7 @@ display(
 
 # COMMAND ----------
 
-df_typed = (
-    df_flat
-    .withColumn("season", F.col("season").cast(T.IntegerType()))
-    .withColumn("round", F.col("round").cast(T.IntegerType()))
-    .withColumn("race_date", F.to_date("race_date", "yyyy-MM-dd"))
-    .withColumn("date_of_birth", F.to_date("date_of_birth", "yyyy-MM-dd"))
-    .withColumn("latitude", F.col("latitude").cast(T.DoubleType()))
-    .withColumn("longitude", F.col("longitude").cast(T.DoubleType()))
-    .withColumn("driver_number", F.col("driver_number").cast(T.IntegerType()))
-    .withColumn("grid_position", F.col("grid_position").cast(T.IntegerType()))
-    .withColumn("position", F.col("position").cast(T.IntegerType()))
-    .withColumn("points", F.col("points").cast(T.DecimalType(6, 2)))
-    .withColumn("laps_completed", F.col("laps_completed").cast(T.IntegerType()))
-    .withColumn("race_time_ms", F.col("race_time_ms").cast(T.LongType()))
-    .withColumn("fastest_lap_rank", F.col("fastest_lap_rank").cast(T.IntegerType()))
-    .withColumn("fastest_lap_number", F.col("fastest_lap_number").cast(T.IntegerType()))
-)
+df_typed = cast_race_results(df_flat)
 
 df_typed.printSchema()
 display(df_typed)
@@ -273,22 +295,7 @@ display(df_typed)
 
 # COMMAND ----------
 
-df_clean = df_typed
-
-string_columns = [
-    field.name
-    for field in df_clean.schema.fields
-    if isinstance(field.dataType, T.StringType)
-]
-
-for column in string_columns:
-    df_clean = df_clean.withColumn(
-        column,
-        F.when(
-            F.trim(F.col(column)) == "",
-            F.lit(None)
-        ).otherwise(F.trim(F.col(column)))
-    )
+df_clean = normalize_strings(df_typed)
 
 display(df_clean)
 
@@ -315,26 +322,9 @@ display(
 
 # COMMAND ----------
 
-BUSINESS_KEY = ["season", "round", "driver_id"]
-
-df_duplicates = (
-    df_clean
-    .groupBy(*BUSINESS_KEY)
-    .count()
-    .filter(F.col("count") > 1)
-)
-
-duplicate_keys = df_duplicates.count()
-
-print(f"Duplicate business keys: {duplicate_keys}")
-
-display(df_duplicates)
-
-# COMMAND ----------
-
 rows_before = df_clean.count()
 
-df_deduplicated = df_clean.dropDuplicates()
+df_deduplicated = deduplicate_records(df_clean)
 
 rows_after = df_deduplicated.count()
 
@@ -344,17 +334,7 @@ print(f"Removed duplicates: {rows_before - rows_after}")
 
 # COMMAND ----------
 
-remaining_duplicates = (
-    df_deduplicated
-    .groupBy(*BUSINESS_KEY)
-    .count()
-    .filter(F.col("count") > 1)
-    .count()
-)
-
-assert remaining_duplicates == 0, (
-    "Conflicting records detected for the business key"
-)
+validate_unique_key(df_deduplicated, BUSINESS_KEY)
 
 print("Business key uniqueness: PASSED")
 
@@ -557,6 +537,12 @@ display(
 
 # COMMAND ----------
 
+validate_nonnegative_points(df_enriched)
+
+print("Race points validation: PASSED")
+
+# COMMAND ----------
+
 REQUIRED_COLUMNS = [
     "season",
     "round",
@@ -593,7 +579,6 @@ invalid_records = df_enriched.filter(
     | (F.col("round") <= 0)
     | (F.col("grid_position") < 0)
     | (F.col("position") <= 0)
-    | (F.col("points") < 0)
     | (F.col("laps_completed") < 0)
 )
 
