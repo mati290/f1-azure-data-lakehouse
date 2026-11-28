@@ -1,5 +1,7 @@
 # F1 Performance Analytics Dashboard
 
+[English](README.md) | [Polski](README.pl.md)
+
 An interactive Formula 1 analytics dashboard built on top of the Gold layer of the Azure Data Lakehouse project.
 
 The dashboard demonstrates how curated analytical datasets can be transformed into an interactive, business-oriented data product without requiring direct access to cloud infrastructure.
@@ -202,3 +204,11 @@ https://github.com/jolpica/jolpica-f1
 See [Dataset Documentation](data/README.md) for additional attribution and licensing information.
 
 This is an unofficial, non-commercial educational Data Engineering portfolio project. It is not affiliated with Formula 1.
+
+## Related Documentation
+
+- [Solution Architecture](../docs/architecture.md)
+- [Setup and Reproducibility](../docs/setup.md)
+- [SQL Business Analytics](../docs/sql_business_analytics.md)
+- [Data Quality and CI](../docs/data_quality_and_ci.md)
+- [Portfolio Demo](../docs/portfolio_demo.md)
