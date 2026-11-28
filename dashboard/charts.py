@@ -196,3 +196,59 @@ def create_grid_vs_finish_chart(
     )
 
     return apply_chart_layout(fig, "Position")
+
+
+def create_summary_chart(
+    summary_df: pd.DataFrame,
+    group_column: str,
+    title: str,
+) -> go.Figure:
+    """Create a horizontal performance comparison chart."""
+
+    chart_df = (
+        summary_df
+        .head(10)
+        .sort_values("total_points")
+    )
+
+    fig = px.bar(
+        chart_df,
+        x="total_points",
+        y=group_column,
+        orientation="h",
+        title=title,
+        color_discrete_sequence=[F1_RED],
+        hover_data={
+            "races": True,
+            "points_per_race": ":.2f",
+            "average_finish": ":.2f",
+            "wins": True,
+            "podiums": True,
+        },
+        labels={
+            group_column: "",
+            "total_points": "Total points",
+            "races": "Races",
+            "points_per_race": "Points per race",
+            "average_finish": "Average finish",
+            "wins": "Wins",
+            "podiums": "Podiums",
+        },
+    )
+
+    fig.update_layout(
+        height=max(280, len(chart_df) * 40 + 100),
+        margin=dict(l=20, r=20, t=55, b=20),
+        showlegend=False,
+        xaxis_title="Total points",
+        yaxis_title="",
+    )
+
+    fig.update_yaxes(
+        categoryorder="array",
+        categoryarray=chart_df[group_column].tolist(),
+    )
+
+    fig.update_xaxes(rangemode="tozero")
+
+    return fig

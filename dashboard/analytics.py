@@ -102,3 +102,104 @@ def calculate_kpis(df: pd.DataFrame) -> dict:
         "podiums": int(df["is_podium"].sum()),
         "dnf_rate": dnf_rate,
     }
+
+
+def prepare_results_table(df: pd.DataFrame) -> pd.DataFrame:
+    """Prepare a presentation-friendly race results table."""
+
+    results = df.sort_values(
+        ["season", "round"],
+        ascending=False,
+    ).copy()
+
+    results["finish_position"] = results[
+        "finish_position"
+    ].where(results["is_classified"]).astype("Int64")
+
+    results["grid_position"] = results[
+        "grid_position"
+    ].where(results["grid_position"] > 0).astype("Int64")
+
+    results["positions_gained"] = results[
+        "positions_gained"
+    ].where(
+        results["is_classified"]
+        & results["grid_position"].notna()
+    )
+
+    columns = {
+        "season": "Season",
+        "round": "Round",
+        "race_name": "Grand Prix",
+        "race_date": "Date",
+        "circuit_name": "Circuit",
+        "constructor_name": "Constructor",
+        "grid_position": "Grid",
+        "finish_position": "Finish",
+        "positions_gained": "Positions gained",
+        "points": "Points",
+        "status": "Status",
+        "is_classified": "Classified",
+    }
+
+    return results[list(columns)].rename(columns=columns)
+
+
+def summarize_performance(
+    df: pd.DataFrame,
+    group_column: str,
+) -> pd.DataFrame:
+    """Aggregate performance by circuit or constructor."""
+
+    allowed_columns = {
+        "circuit_name",
+        "constructor_name",
+    }
+
+    if group_column not in allowed_columns:
+        raise ValueError(
+            f"Unsupported grouping column: {group_column}"
+        )
+
+    records = []
+
+    for group_name, group_df in df.groupby(group_column):
+        kpis = calculate_kpis(group_df)
+
+        races = kpis["races"]
+
+        records.append(
+            {
+                group_column: group_name,
+                "races": races,
+                "total_points": kpis["total_points"],
+                "points_per_race": (
+                    kpis["total_points"] / races
+                    if races > 0
+                    else None
+                ),
+                "average_finish": kpis["average_finish"],
+                "wins": kpis["wins"],
+                "podiums": kpis["podiums"],
+                "dnf_rate": kpis["dnf_rate"],
+            }
+        )
+
+    columns = [
+        group_column,
+        "races",
+        "total_points",
+        "points_per_race",
+        "average_finish",
+        "wins",
+        "podiums",
+        "dnf_rate",
+    ]
+
+    return pd.DataFrame(
+        records,
+        columns=columns,
+    ).sort_values(
+        ["total_points", "races"],
+        ascending=False,
+    ).reset_index(drop=True)

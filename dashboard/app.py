@@ -5,6 +5,7 @@ from charts import (
     create_finish_chart,
     create_grid_vs_finish_chart,
     create_points_chart,
+    create_summary_chart,
 )
 
 import streamlit as st
@@ -14,6 +15,8 @@ from analytics import (
     filter_results,
     get_circuit_options,
     get_driver_options,
+    prepare_results_table,
+    summarize_performance,
 )
 from data_loader import load_dashboard_data
 
@@ -193,33 +196,164 @@ st.caption(
     "starting grid positions are shown as gaps."
 )
 
-# Race results preview
+
+# Detailed analytics
 
 st.divider()
 
-st.subheader("Race results")
+st.subheader("Detailed Analytics")
 
-st.dataframe(
-    filtered_df[
-        [
-            "season",
-            "round",
-            "race_name",
-            "race_date",
-            "constructor_name",
-            "grid_position",
-            "finish_position",
-            "points",
-            "status",
-        ]
-    ].sort_values(
-        ["season", "round"],
-        ascending=False,
-    ),
-    hide_index=True,
+results_tab, circuits_tab, constructors_tab = st.tabs(
+    [
+        "Race Results",
+        "Circuit Performance",
+        "Constructor Performance",
+    ]
 )
+
+
+with results_tab:
+    results_table = prepare_results_table(filtered_df)
+
+    st.dataframe(
+        results_table,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Date": st.column_config.DateColumn(
+                format="YYYY-MM-DD"
+            ),
+            "Points": st.column_config.NumberColumn(
+                format="%.2f"
+            ),
+            "Positions gained": st.column_config.NumberColumn(
+                format="%+.0f"
+            ),
+            "Classified": st.column_config.CheckboxColumn(),
+        },
+    )
+
+    st.caption(
+        "Missing finishing positions indicate "
+        "non-classified or unavailable results. "
+        "Missing grid positions may indicate a pit-lane start "
+        "or unavailable starting position."
+    )
+
+    csv_data = results_table.to_csv(
+        index=False,
+        date_format="%Y-%m-%d",
+    ).encode("utf-8-sig")
+
+    st.download_button(
+        label="Export results to CSV",
+        data=csv_data,
+        file_name=f"{selected_driver}_race_results.csv",
+        mime="text/csv",
+        icon=":material/download:",
+    )
+
+
+summary_column_config = {
+    "races": st.column_config.NumberColumn(
+        "Races",
+        format="%d",
+    ),
+    "total_points": st.column_config.NumberColumn(
+        "Total points",
+        format="%.2f",
+    ),
+    "points_per_race": st.column_config.NumberColumn(
+        "Points per race",
+        format="%.2f",
+    ),
+    "average_finish": st.column_config.NumberColumn(
+        "Avg. finish",
+        format="%.2f",
+    ),
+    "wins": st.column_config.NumberColumn("Wins"),
+    "podiums": st.column_config.NumberColumn("Podiums"),
+    "dnf_rate": st.column_config.NumberColumn(
+        "DNF rate (%)",
+        format="%.1f",
+    ),
+}
+
+
+with circuits_tab:
+    st.caption(
+        "Circuit performance across the selected race results."
+    )
+
+    circuit_summary = summarize_performance(
+        filtered_df,
+        group_column="circuit_name",
+    )
+
+    if circuit_summary.empty:
+        st.info("No circuit performance data available.")
+    else:
+        st.plotly_chart(
+            create_summary_chart(
+                circuit_summary,
+                group_column="circuit_name",
+                title="Top 10 Circuits by Points",
+            ),
+            width="stretch",
+            key="circuit_summary_chart",
+        )
+
+        st.dataframe(
+            circuit_summary,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                **summary_column_config,
+                "circuit_name": "Circuit",
+            },
+        )
+
+
+with constructors_tab:
+    st.caption(
+        "Selected driver's performance by constructor."
+    )
+
+    constructor_summary = summarize_performance(
+        filtered_df,
+        group_column="constructor_name",
+    )
+
+    if constructor_summary.empty:
+        st.info("No constructor performance data available.")
+    else:
+        st.plotly_chart(
+            create_summary_chart(
+                constructor_summary,
+                group_column="constructor_name",
+                title="Points by Constructor",
+            ),
+            width="stretch",
+            key="constructor_summary_chart",
+        )
+
+        st.dataframe(
+            constructor_summary,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                **summary_column_config,
+                "constructor_name": "Constructor",
+            },
+        )
+
+
+# Snapshot information
+
+st.divider()
 
 st.caption(
     f"Snapshot exported: {metadata['exported_at_utc']} | "
     f"Source: {metadata['source']}"
 )
+
