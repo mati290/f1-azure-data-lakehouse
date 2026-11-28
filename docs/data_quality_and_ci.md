@@ -1,90 +1,142 @@
-# Data Quality and Continuous Integration
+# Data Quality and CI
+
+[English](data_quality_and_ci.md) | [Polski](pl/data_quality_and_ci.md)
 
 ## 1. Overview
 
-The F1 Azure Data Lakehouse implements automated data quality checks and lightweight continuous integration to improve the reliability, maintainability and reproducibility of data transformations.
+The F1 Azure Data Lakehouse implements data quality controls across ingestion, transformation, dimensional modeling, analytics and dashboard serving.
 
-The testing framework operates independently of Azure infrastructure and does not require cloud credentials.
+Automated tests and continuous integration protect reusable business logic against regressions.
 
-## 2. Objectives
+Cloud integration validation is performed separately in Azure Databricks.
 
-- Protect core PySpark transformations against regressions.
-- Validate business rules and data integrity.
-- Separate reusable transformation logic from notebook orchestration.
-- Automate testing through GitHub Actions.
-- Support local development without Azure dependencies.
+## 2. Data Quality Architecture
 
-## 3. Technology Stack
+```mermaid
+flowchart TD
+    A[Source API] --> B[Bronze Validation]
+    B --> C[Silver Validation]
+    C --> D[Gold Validation]
+    D --> E[SQL Analytics Validation]
+    E --> F[Snapshot Validation]
+    F --> G[Dashboard]
 
-| Technology | Purpose |
+    H[GitHub Actions] --> I[PySpark Tests]
+    H --> J[Dashboard Tests]
+    I --> K[CI Result]
+    J --> K
+```
+
+## 3. Validation by Layer
+
+| Layer | Validation |
 |---|---|
-| Python 3.12 | Development environment |
-| PySpark | Data transformations |
-| pytest | Automated testing framework |
-| Java 17 | Local Spark runtime |
-| GitHub Actions | Continuous integration |
-| Azure Databricks | Lakehouse integration and regression validation |
+| Bronze | Pagination, metadata, season coverage and completeness |
+| Silver | Schema, business keys, points and derived metrics |
+| Gold | Primary keys, foreign keys and record reconciliation |
+| Analytics | View availability, rankings and business metric consistency |
+| Snapshot | Schema, metadata, record count and business keys |
+| Dashboard | Filters, KPIs, aggregations and chart generation |
 
-## 4. Project Structure
+Notebook-level validation failures stop dependent processing stages.
 
-| File | Responsibility |
-|---|---|
-| `src/__init__.py` | Python package initialization |
-| `src/transformations.py` | Reusable data transformation functions |
-| `src/data_quality.py` | Business rule validation |
-| `tests/conftest.py` | Spark session and test fixtures |
-| `tests/test_transformations.py` | Transformation tests |
-| `tests/test_data_quality.py` | Data quality tests |
-| `pytest.ini` | pytest configuration |
-| `requirements-dev.txt` | Development dependencies |
-| `.github/workflows/ci.yml` | CI workflow configuration |
+SQL validation queries require manual inspection where automatic failure enforcement is not implemented.
 
-## 5. Reusable Transformations
-
-The Silver notebook delegates core transformation logic to reusable Python functions.
+## 4. Reusable Transformation Logic
 
 | Function | Responsibility |
 |---|---|
-| `cast_race_results()` | Convert raw values into appropriate Spark data types |
-| `normalize_strings()` | Trim whitespace and convert empty strings to null values |
-| `deduplicate_records()` | Remove exact duplicate records |
+| cast_race_results() | Convert values into appropriate Spark data types |
+| normalize_strings() | Trim strings and convert empty strings to NULL |
+| deduplicate_records() | Remove exact duplicate records |
 
-Conflicting records sharing the same business key are not silently removed. They are detected by the data quality validation layer.
+Implementation:
 
-## 6. Data Quality Rules
+- `src/transformations.py`
+- `src/data_quality.py`
 
-The Silver layer uses the following composite business key:
+Conflicting records sharing the same business key are rejected rather than silently removed.
+
+Invalid records detected by shared validation functions raise `DataQualityError`.
+
+## 5. Business Rules
+
+| Rule | Expected behavior |
+|---|---|
+| Business key uniqueness | Reject duplicate keys |
+| Business key completeness | Reject NULL key values |
+| Points completeness | Reject NULL points |
+| Non-negative points | Reject negative points |
+| Fractional points | Preserve valid decimal values |
+| Exact duplicates | Remove identical records |
+| Non-classified finish | Preserve missing finishing position |
+| Positions gained | Require a valid grid and classified finish |
+| Referential integrity | Reject unmatched dimension keys |
+
+Silver business key:
 
 `season + round + driver_id`
 
-| Rule | Expected behaviour |
-|---|---|
-| Business key uniqueness | Reject duplicate race-driver keys |
-| Business key completeness | Reject null business key values |
-| Non-negative points | Reject negative points |
-| Points completeness | Reject null points |
-| Fractional points | Preserve valid decimal values |
-| Exact duplicates | Remove identical records |
+Gold fact business key:
 
-Invalid records detected by the shared validation functions raise a `DataQualityError`.
+`race_id + driver_id`
 
-Additional notebook-level validations protect historical coverage, required columns, numeric ranges and derived business metrics.
+Primary and foreign keys are logical constraints validated by the processing code.
 
-## 7. Automated Test Coverage
+## 6. Automated Test Coverage
 
-The test suite contains 21 automated tests.
+The combined MVP test suite contains 57 tests.
 
-| Test category | Number of tests |
+| Test suite | Tests |
+|---|---:|
+| PySpark transformations and data quality | 21 |
+| Dashboard analytics, loading and charts | 36 |
+| Total | 57 |
+
+The combined suite passed during local MVP development.
+
+### PySpark Tests
+
+| Category | Tests |
 |---|---:|
 | Data type conversion | 5 |
 | String normalization | 4 |
 | Deduplication | 3 |
 | Data quality validation | 9 |
-| **Total** | **21** |
+| Total | 21 |
 
-Synthetic fixtures represent valid and intentionally invalid Formula 1 race results.
+### Dashboard Tests
 
-The tests cover both successful transformations and expected validation failures.
+Coverage includes:
+
+- Snapshot loading.
+- Required schema validation.
+- Metadata consistency.
+- Business key validation.
+- Driver and circuit filters.
+- Last N race selection.
+- KPI calculations.
+- Empty result handling.
+- Non-classified results.
+- Circuit and constructor aggregations.
+- Plotly chart generation.
+
+## 7. Test Structure
+
+```text
+tests/
+├── conftest.py
+├── test_transformations.py
+└── test_data_quality.py
+
+dashboard/tests/
+├── conftest.py
+├── test_analytics.py
+├── test_data_loader.py
+└── test_charts.py
+```
+
+The tests use controlled fixtures and do not require live Azure services.
 
 ## 8. Running Tests Locally
 
@@ -94,10 +146,11 @@ Prerequisites:
 - Java 17
 - Python virtual environment
 
-Install development dependencies:
+Install dependencies:
 
 ```bash
 python -m pip install -r requirements-dev.txt
+python -m pip install -r dashboard/requirements.txt
 ```
 
 Check dependency consistency:
@@ -106,91 +159,153 @@ Check dependency consistency:
 python -m pip check
 ```
 
-Execute the test suite:
+Run the complete test suite:
 
 ```bash
-python -m pytest
+python -m pytest -q
 ```
 
-Expected result:
+Expected MVP baseline:
 
 ```text
-21 passed
+57 passed
 ```
 
-No Azure credentials or live API requests are required.
+Run individual test suites:
 
-## 9. Continuous Integration
+```bash
+python -m pytest tests -v
+python -m pytest dashboard/tests -v
+```
 
-The GitHub Actions workflow automatically executes the test suite on:
+A Pandas compatibility warning was observed during local PySpark testing. Dependency compatibility should be reviewed before expanding Pandas-dependent Spark operations.
 
-- Pushes to the main branch.
+## 9. CI
+
+Workflow:
+
+`.github/workflows/ci.yml`
+
+The workflow executes automatically on:
+
+- Pushes to main.
 - Pushes to feature branches.
-- Pull requests targeting the main branch.
+- Pull requests targeting main.
 
-The workflow performs the following operations:
+```mermaid
+flowchart TD
+    A[Push or Pull Request] --> B[Checkout]
+    B --> C[Configure Python 3.12]
+    C --> D[Configure Java 17]
+    D --> E[Install Dependencies]
+    E --> F[pip check]
+    F --> G[Run pytest]
+    G --> H{Tests Passed?}
+    H -->|Yes| I[Successful CI]
+    H -->|No| J[Failed CI]
+```
 
-1. Check out the repository.
-2. Configure Python 3.12.
-3. Configure Java 17.
-4. Install development dependencies.
-5. Validate dependency consistency.
-6. Execute pytest.
+The GitHub-hosted Ubuntu runner installs both development and dashboard dependencies.
 
-The workflow runs on a GitHub-hosted Ubuntu runner with read-only repository permissions.
+The pytest configuration discovers tests in `tests/` and `dashboard/tests/`.
 
-Any failing test causes the CI job to fail.
+The workflow uses read-only repository permissions and does not deploy cloud infrastructure.
 
-## 10. Databricks Integration
+## 10. Cloud Integration Validation
 
-The Bronze-to-Silver notebook imports shared transformation and validation functions from the project source package.
-
-Development changes are tested in a Databricks Git folder before updating the production job.
-
-## 11. Silver Regression Validation
-
-The refactored Silver transformation was compared against the existing Silver Delta table.
-
-Validation included:
-
-- Column names and data types.
-- Total record count.
-- Bidirectional record-level comparison using exceptAll().
+The original validated historical dataset produced the following results.
 
 | Metric | Value |
 |---|---:|
-| Seasons | 5 |
-| Race results | 2,278 |
+| Bronze JSON files | 25 |
+| Silver records | 2,278 |
+| Gold fact records | 2,278 |
 | Classified results | 2,007 |
 | DNF | 288 |
 | DNS | 14 |
 | DSQ | 11 |
 | Wins | 114 |
 | Podiums | 342 |
+| Duplicate business keys | 0 |
+| Orphan foreign keys | 0 |
+| Analytical views | 6 |
 
-The regression validation passed without overwriting the existing Silver table.
+DNF and classification flags are not mutually exclusive.
 
-## 12. Security and Cost Considerations
+### Points Reconciliation
 
-- No cloud credentials are required for CI.
-- No Azure infrastructure is required for CI execution.
-- GitHub Actions uses read-only repository permissions.
-- Development access to GitHub is restricted to the project repository.
-- Automated tests use synthetic datasets.
-- CI does not provision or deploy Azure resources.
+| Layer | Total race points |
+|---|---:|
+| Silver | 11,540.50 |
+| Gold | 11,540.50 |
+| Analytics | 11,540.50 |
 
-## 13. Current Limitations
+The reconciliation covers Grand Prix race points only.
 
-- CI does not execute the complete Azure pipeline.
-- Cloud integration validation is performed separately in Databricks.
-- Automated deployment is outside the MVP scope.
-- Test coverage focuses on core transformations and selected business rules.
-- Production notebook updates require controlled manual deployment.
+## 11. Idempotency
 
-## 14. Future Improvements
+Silver and Gold transformations use Delta overwrite mode.
 
-- Expand automated business logic coverage.
-- Add dimensional model integrity tests.
-- Introduce additional malformed input scenarios.
-- Add automated test coverage reporting.
-- Introduce controlled deployment automation if required.
+Content-level idempotency was validated for the historical dataset using Delta Lake Time Travel.
+
+Validation included:
+
+- Schema comparison.
+- Record count comparison.
+- Business key uniqueness.
+- Bidirectional exceptAll comparison.
+
+Repeated processing of unchanged historical input produced equivalent table contents in the tested execution sequence.
+
+This does not guarantee idempotency for every future source change or concurrent execution scenario.
+
+## 12. End-to-End Validation
+
+| Scenario | Documented result |
+|---|---|
+| Full historical load | PASS |
+| Selected season refresh | PASS |
+| Invalid parameter rejection | PASS |
+| Record count validation | PASS |
+| Business key uniqueness | PASS |
+| Delta content consistency | PASS |
+| Bronze storage validation | PASS |
+| Analytics view validation | PASS |
+| Points reconciliation | PASS |
+
+See [End-to-End Pipeline](end_to_end_pipeline.md) for execution evidence.
+
+## 13. Security and Cost
+
+- No Azure credentials required for local tests.
+- No live cloud resources required for CI.
+- Read-only GitHub Actions permissions.
+- Controlled test fixtures.
+- Manual cloud integration testing.
+- No automated infrastructure deployment.
+
+## 14. Limitations
+
+- CI does not execute the full Azure pipeline.
+- Not all SQL validation queries automatically fail execution.
+- Cross-table transactional rollback is not implemented.
+- Concurrent pipeline execution has not been fully tested.
+- Automated coverage reporting is outside the current MVP.
+- Pandas compatibility requires continued monitoring.
+
+## 15. Future Improvements
+
+- Automated SQL assertion enforcement.
+- Additional malformed input scenarios.
+- Expanded dimensional model tests.
+- Automated test coverage reporting.
+- Dependency compatibility checks.
+- Controlled deployment automation.
+
+## 16. Related Documentation
+
+- [Solution Architecture](architecture.md)
+- [SQL Business Analytics](sql_business_analytics.md)
+- [End-to-End Pipeline](end_to_end_pipeline.md)
+- [Setup and Reproducibility](setup.md)
+- [Dashboard Documentation](../dashboard/README.md)

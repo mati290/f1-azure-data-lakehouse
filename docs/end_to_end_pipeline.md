@@ -530,19 +530,18 @@ Known limitations:
 
 All nine documented test scenarios passed.
 
-## 17. Next Steps
+## 17. Subsequent MVP Development
 
-The next development phase focuses on automated
-data quality testing and continuous integration.
+The end-to-end orchestration provided the foundation
+for the remaining MVP features.
 
-Planned improvements:
+Subsequent development introduced:
 
-- Extract reusable transformation logic.
-- Implement automated Python unit tests.
-- Add business rule validation.
-- Improve SQL data quality checks.
-- Configure GitHub Actions CI.
-- Prepare the Streamlit analytics dashboard.
+- Automated data quality tests.
+- Reusable transformation logic.
+- GitHub Actions continuous integration.
+- Interactive Streamlit dashboard.
+- Bilingual portfolio documentation.
 
-The end-to-end orchestration provides the foundation
-for the remaining MVP development.
+See the [Project Roadmap](roadmap.md) for future
+development beyond the MVP.
