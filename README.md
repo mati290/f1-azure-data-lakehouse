@@ -99,8 +99,37 @@ Clone the repository and create a Python virtual environment.
 - Telemetry visualization
 - Animated race replay
 
+## Interactive F1 Performance Dashboard
+
+The project includes an interactive Streamlit dashboard powered by curated Gold analytics data.
+
+![F1 Performance Analytics Dashboard](docs/screenshots/dashboard/01-dashboard-overview.png)
+
+### Key Features
+
+- Historical Formula 1 race analysis for seasons 2021–2025
+- 2,278 curated race results in the initial Gold snapshot
+- Interactive driver, circuit and race count filters
+- Dynamic performance KPIs
+- Interactive Plotly visualizations
+- Circuit and constructor performance analysis
+- CSV export
+- Automated unit and integration tests
+- Local execution without Azure credentials
+
+### Quick Start
+
+```bash
+python -m pip install -r dashboard/requirements.txt
+python -m streamlit run dashboard/app.py
+```
+
+For detailed setup instructions, metric definitions, architecture and additional screenshots, see the [Dashboard Documentation](dashboard/README.md).
+
+
 ## License
 
 The project source code is licensed under the MIT License. External data remains subject to its respective source terms.
 
 This is an independent educational project and is not affiliated with Formula 1.
+
