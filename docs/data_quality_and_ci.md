@@ -122,4 +122,75 @@ No Azure credentials or live API requests are required.
 
 ## 9. Continuous Integration
 
-The GitHub Actions workflow automatically
+The GitHub Actions workflow automatically executes the test suite on:
+
+- Pushes to the main branch.
+- Pushes to feature branches.
+- Pull requests targeting the main branch.
+
+The workflow performs the following operations:
+
+1. Check out the repository.
+2. Configure Python 3.12.
+3. Configure Java 17.
+4. Install development dependencies.
+5. Validate dependency consistency.
+6. Execute pytest.
+
+The workflow runs on a GitHub-hosted Ubuntu runner with read-only repository permissions.
+
+Any failing test causes the CI job to fail.
+
+## 10. Databricks Integration
+
+The Bronze-to-Silver notebook imports shared transformation and validation functions from the project source package.
+
+Development changes are tested in a Databricks Git folder before updating the production job.
+
+## 11. Silver Regression Validation
+
+The refactored Silver transformation was compared against the existing Silver Delta table.
+
+Validation included:
+
+- Column names and data types.
+- Total record count.
+- Bidirectional record-level comparison using exceptAll().
+
+| Metric | Value |
+|---|---:|
+| Seasons | 5 |
+| Race results | 2,278 |
+| Classified results | 2,007 |
+| DNF | 288 |
+| DNS | 14 |
+| DSQ | 11 |
+| Wins | 114 |
+| Podiums | 342 |
+
+The regression validation passed without overwriting the existing Silver table.
+
+## 12. Security and Cost Considerations
+
+- No cloud credentials are required for CI.
+- No Azure infrastructure is required for CI execution.
+- GitHub Actions uses read-only repository permissions.
+- Development access to GitHub is restricted to the project repository.
+- Automated tests use synthetic datasets.
+- CI does not provision or deploy Azure resources.
+
+## 13. Current Limitations
+
+- CI does not execute the complete Azure pipeline.
+- Cloud integration validation is performed separately in Databricks.
+- Automated deployment is outside the MVP scope.
+- Test coverage focuses on core transformations and selected business rules.
+- Production notebook updates require controlled manual deployment.
+
+## 14. Future Improvements
+
+- Expand automated business logic coverage.
+- Add dimensional model integrity tests.
+- Introduce additional malformed input scenarios.
+- Add automated test coverage reporting.
+- Introduce controlled deployment automation if required.
