@@ -12,7 +12,7 @@ Każde usprawnienie powinno zostać zrealizowane jako oddzielne GitHub Issue z o
 
 ## 2. v1.0.0 – MVP
 
-Status: Końcowy przegląd.
+Status: Ukończone.
 
 Zakres:
 

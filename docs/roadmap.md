@@ -12,7 +12,7 @@ Each enhancement should be implemented as a separately scoped GitHub issue with 
 
 ## 2. v1.0.0 – MVP
 
-Status: Final review.
+Status: Completed.
 
 Scope:
 

@@ -12,7 +12,7 @@
 
 An end-to-end Data Engineering portfolio project implementing a cloud-based lakehouse for historical Formula 1 performance analytics using Microsoft Azure.
 
-**Project status:** MVP – Release Candidate
+**Project status:** MVP Completed – v1.0.0
 
 ## 1. Project Overview
 
@@ -381,7 +381,7 @@ f1-azure-data-lakehouse/
 | F08 – Pipeline orchestration | Completed |
 | F09 – Data quality and CI | Completed |
 | F10 – Streamlit dashboard | Completed |
-| F11 – Portfolio documentation | Final review |
+| F11 – Portfolio documentation | Completed |
 
 ## 17. Limitations and Future Development
 

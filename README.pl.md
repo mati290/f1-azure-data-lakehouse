@@ -12,7 +12,7 @@
 
 Kompleksowy projekt portfolio Data Engineering implementujący chmurową architekturę Lakehouse do analizy historycznych wyników Formuły 1 z wykorzystaniem Microsoft Azure.
 
-**Status projektu:** MVP – kandydat do wydania
+**Status projektu:** MVP ukończone – v1.0.0
 
 ## 1. Opis projektu
 
@@ -381,7 +381,7 @@ f1-azure-data-lakehouse/
 | F08 – Orkiestracja pipeline'u | Zakończona |
 | F09 – Jakość danych i CI | Zakończona |
 | F10 – Dashboard Streamlit | Zakończona |
-| F11 – Dokumentacja portfolio | Końcowy przegląd |
+| F11 – Dokumentacja portfolio | Zakończona |
 
 ## 17. Ograniczenia i dalszy rozwój
 
