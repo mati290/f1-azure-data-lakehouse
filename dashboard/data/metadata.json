@@ -1,0 +1,14 @@
+{
+  "dataset": "F1 Race Results",
+  "source": "f1_lakehouse.analytics.vw_race_results",
+  "source_api": "Jolpica F1 API",
+  "exported_at_utc": "2026-11-28T17:27:38.564333+00:00",
+  "season_from": 2021,
+  "season_to": 2025,
+  "record_count": 2278,
+  "column_count": 38,
+  "format": "parquet",
+  "compression": "snappy",
+  "file_name": "race_results.parquet",
+  "file_size_bytes": 76962
+}
