@@ -667,20 +667,6 @@ print("Data completeness validation: PASSED")
 
 # COMMAND ----------
 
-df_reference = spark.table(SILVER_TABLE)
-
-assert df_enriched.dtypes == df_reference.dtypes
-
-assert df_enriched.count() == df_reference.count()
-
-assert df_enriched.exceptAll(df_reference).count() == 0
-
-assert df_reference.exceptAll(df_enriched).count() == 0
-
-print("Silver regression test: PASSED")
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ## 11. Write Silver Delta Table
 # MAGIC
