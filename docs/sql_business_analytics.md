@@ -1,299 +1,324 @@
 # SQL Business Analytics
 
+[English](sql_business_analytics.md) | [Polski](pl/sql_business_analytics.md)
+
 ## 1. Overview
 
 The analytics layer provides reusable SQL views for Formula 1 performance analysis based on the Gold dimensional model.
 
-It separates business logic from data transformation processes and provides a consistent data source for the future Streamlit dashboard.
+It centralizes business logic, provides consistent metric definitions and serves as the source of the curated Streamlit dashboard dataset.
 
-### Objectives
-
-- Answer five business questions using SQL.
-- Provide reusable analytical views.
-- Ensure consistent business metric definitions.
-- Validate analytical results against the Gold layer.
-- Support dashboard development.
-
-## 2. Technology Stack
-
-| Technology | Purpose |
-|---|---|
-| Azure Databricks | SQL execution environment |
-| Spark SQL | Business analytics |
-| Delta Lake | Underlying Gold data storage |
-| Unity Catalog | Schema and view management |
-| GitHub | Source code version control |
-| Streamlit | Future dashboard integration |
-
-## 3. Data Scope
-
-The analytics layer covers Formula 1 race results from the 2021–2025 seasons.
-
-The underlying Gold dataset contains:
+## 2. Dataset
 
 | Metric | Value |
 |---|---:|
-| Seasons | 5 |
+| Historical seasons | 2021–2025 |
 | Races | 114 |
 | Drivers | 35 |
 | Constructors | 12 |
 | Circuits | 28 |
-| Race result records | 2,278 |
+| Race results | 2,278 |
 | Total race points | 11,540.50 |
 
-Sprint race results are excluded. Therefore, aggregated points should not be interpreted as official championship standings.
+These values represent the original validated historical dataset.
 
-## 4. Analytics Architecture
+Sprint results are excluded. Aggregated race points should not be interpreted as official championship standings.
 
-The analytics layer is implemented as a dedicated Unity Catalog schema:
+## 3. Analytics Architecture
+
+The analytical views are registered in the Unity Catalog schema:
 
 `f1_lakehouse.analytics`
 
-It consumes the existing Gold dimensional model:
+```mermaid
+flowchart TD
+    F[Fact Race Results] --> V[Base Analytical View]
+    D1[Dim Drivers] --> V
+    D2[Dim Constructors] --> V
+    D3[Dim Circuits] --> V
+    D4[Dim Races] --> V
 
-- `f1_lakehouse.gold.fact_race_results`
-- `f1_lakehouse.gold.dim_drivers`
-- `f1_lakehouse.gold.dim_constructors`
-- `f1_lakehouse.gold.dim_circuits`
-- `f1_lakehouse.gold.dim_races`
+    V --> Q1[Recent Circuit History]
+    V --> Q2[Driver Circuit Performance]
+    V --> Q3[Positions Gained]
+    V --> Q4[Season Performance]
+    V --> Q5[Constructor Circuit Performance]
+    V --> P[Parquet Snapshot]
+    P --> APP[Streamlit Dashboard]
+```
 
-The analytical views do not create additional physical copies of the underlying data.
+Standard SQL views are used instead of materialized views.
 
-## 5. Analytical Views
+The views do not create additional physical copies of the underlying Gold tables.
 
-| View | Grain | Purpose |
+## 4. Analytical Views
+
+| View | Data grain | Purpose |
 |---|---|---|
-| `vw_race_results` | Driver per race | Base analytical dataset |
-| `vw_driver_circuit_history` | Driver per race | Recent circuit performance |
-| `vw_driver_circuit_performance` | Driver per circuit | Circuit performance comparison |
-| `vw_driver_positions_gained` | Driver | Grid position improvement |
-| `vw_driver_season_performance` | Driver per season | Historical performance trends |
-| `vw_constructor_circuit_performance` | Constructor per circuit | Constructor performance comparison |
+| vw_race_results | Driver per race | Base analytical dataset |
+| vw_driver_circuit_history | Driver per race | Recent circuit performance |
+| vw_driver_circuit_performance | Driver per circuit | Circuit comparison |
+| vw_driver_positions_gained | Driver | Grid position improvement |
+| vw_driver_season_performance | Driver per season | Historical trends |
+| vw_constructor_circuit_performance | Constructor per circuit | Constructor comparison |
 
-All business-specific views depend on the base analytical view.
+The base view joins the Gold fact table with all four dimensions using INNER JOIN operations.
 
-## 6. Base Analytical View
+Its composite business key consists of `race_id` and `driver_id`.
 
-The `vw_race_results` view combines the Gold fact table with all four dimension tables using INNER JOIN operations.
+## 5. Business Questions and Example Queries
 
-It provides a unified analytical dataset containing:
+### 5.1. Recent Driver Circuit Performance
 
-- Race and season information.
-- Driver information.
-- Constructor information.
-- Circuit information.
-- Race performance metrics.
-- Classification and race status indicators.
+How has a driver performed in their last three race appearances at Silverstone?
 
-The business key is the combination of `race_id` and `driver_id`.
+```sql
+SELECT
+    season,
+    race_name,
+    driver_name,
+    grid_position,
+    finish_position,
+    positions_gained,
+    points,
+    status
+FROM f1_lakehouse.analytics.vw_driver_circuit_history
+WHERE driver_id = 'max_verstappen'
+    AND circuit_id = 'silverstone'
+    AND recency_rank <= 3
+ORDER BY recency_rank;
+```
 
-## 7. Business Questions
+The view uses ROW_NUMBER to rank race entries within each driver and circuit combination.
 
-### 7.1. Recent Driver Circuit Performance
+Non-classified results are retained.
 
-**Question:** How has a driver performed in their last N race appearances at a selected circuit?
+### 5.2. Strongest Driver Circuits
 
-**View:** `vw_driver_circuit_history`
+Which circuits provide the strongest historical results for Max Verstappen?
 
-The view uses the ROW_NUMBER window function to rank race appearances by date within each driver and circuit combination.
+```sql
+SELECT
+    circuit_name,
+    race_starts,
+    total_points,
+    avg_points_per_start,
+    avg_finish_position,
+    wins,
+    podiums
+FROM f1_lakehouse.analytics.vw_driver_circuit_performance
+WHERE driver_id = 'max_verstappen'
+    AND race_starts >= 3
+ORDER BY
+    avg_points_per_start DESC,
+    race_starts DESC,
+    circuit_id;
+```
 
-Key metrics:
+Average points per start is used to account for different numbers of race starts.
 
-- Grid position.
-- Finish position.
-- Positions gained.
-- Race points.
-- Wins and podiums.
-- Race status.
+A minimum of three starts reduces the influence of small samples.
 
-The number of recent appearances can be controlled through the `recency_rank` filter.
+### 5.3. Average Positions Gained
 
-All recorded race entries are retained, including DNF, DNS and DSQ results.
+Which drivers gain the most grid positions on average?
 
-### 7.2. Strongest Driver Circuits
+```sql
+SELECT
+    driver_name,
+    valid_results,
+    avg_grid_position,
+    avg_finish_position,
+    avg_positions_gained
+FROM f1_lakehouse.analytics.vw_driver_positions_gained
+WHERE valid_results >= 10
+ORDER BY
+    avg_positions_gained DESC,
+    valid_results DESC,
+    driver_id
+LIMIT 10;
+```
 
-**Question:** Which circuits are a driver's strongest?
+Positions gained are calculated as:
 
-**View:** `vw_driver_circuit_performance`
+`grid_position - finish_position`
 
-Driver performance is aggregated across circuits.
+Only classified results with valid positive starting positions are included.
 
-Key metrics:
+This metric does not represent the number of on-track overtakes.
 
-- Race entries and starts.
-- Total points.
-- Average points per start.
-- Average finishing position.
-- Best finishing position.
-- Wins and podiums.
-- Win and podium rates.
+### 5.4. Driver Season Performance
 
-Average points per start is the primary ranking metric.
+How has driver performance changed across seasons?
 
-Example ranking queries require at least three race starts to reduce the influence of small sample sizes.
+```sql
+SELECT
+    season,
+    driver_name,
+    race_starts,
+    total_points,
+    avg_points_per_start,
+    wins,
+    podiums,
+    points_yoy_change,
+    avg_points_yoy_change
+FROM f1_lakehouse.analytics.vw_driver_season_performance
+WHERE driver_id = 'max_verstappen'
+ORDER BY season;
+```
 
-### 7.3. Average Positions Gained
+The view uses LAG to retrieve previous-season metrics.
 
-**Question:** How many grid positions does a driver gain or lose on average?
+Year-over-year changes are calculated only for consecutive seasons.
 
-**View:** `vw_driver_positions_gained`
+Undefined changes are represented by NULL values.
 
-Positions gained are calculated in the Silver layer using:
+### 5.5. Constructor Circuit Performance
 
-`positions_gained = grid_position - finish_position`
+Which constructors perform best at Silverstone?
 
-Only classified results with valid starting positions are included.
+```sql
+SELECT
+    constructor_name,
+    race_starts,
+    total_points,
+    avg_points_per_race,
+    wins,
+    podiums
+FROM f1_lakehouse.analytics.vw_constructor_circuit_performance
+WHERE circuit_id = 'silverstone'
+    AND race_starts >= 3
+ORDER BY
+    avg_points_per_race DESC,
+    race_starts DESC,
+    constructor_id;
+```
 
-Key metrics:
+Distinct race identifiers prevent multiple driver results from being counted as separate constructor race appearances.
 
-- Average starting position.
-- Average finishing position.
-- Average positions gained.
-- Total positions gained.
-- Best and worst position changes.
-- Valid and excluded result counts.
-- Percentage of races with positions gained.
-
-Example ranking queries require at least ten valid results.
-
-Positions gained should not be interpreted as the number of on-track overtakes.
-
-### 7.4. Driver Season Performance
-
-**Question:** How does driver performance change across seasons?
-
-**View:** `vw_driver_season_performance`
-
-Race results are aggregated by driver and season.
-
-Key metrics:
-
-- Race starts.
-- Total race points.
-- Average points per start.
-- Average finishing position.
-- Average positions gained.
-- Wins and podiums.
-- Year-over-year performance changes.
-
-The LAG window function retrieves previous-season metrics.
-
-Year-over-year changes are calculated only for consecutive seasons. Missing previous seasons and undefined percentage changes are represented by NULL values.
-
-### 7.5. Constructor Circuit Performance
-
-**Question:** Which constructors perform best at a selected circuit?
-
-**View:** `vw_constructor_circuit_performance`
-
-Driver-level results are aggregated by constructor and circuit.
-
-Key metrics:
-
-- Distinct race appearances.
-- Distinct races with at least one driver starting.
-- Individual driver entries and starts.
-- Total race points.
-- Average points per race appearance.
-- Wins and individual podiums.
-- Races with at least one podium.
-- Win and podium race rates.
-
-Distinct race identifiers prevent individual driver results from being incorrectly counted as separate constructor race appearances.
-
-Example ranking queries require at least three races with a constructor start.
-
-## 8. Business Metric Definitions
+## 6. Business Metric Definitions
 
 | Metric | Definition |
 |---|---|
-| Race entry | A recorded driver race result |
-| Driver race start | A race entry not marked as DNS |
-| Constructor race appearance | A distinct race with a recorded constructor result |
-| Constructor race start | A distinct race with at least one driver not marked as DNS |
-| Average points per start | Average race points across driver starts |
-| Average constructor points per race | Total constructor points divided by distinct race appearances |
-| Average finishing position | Average classified finishing position |
-| Positions gained | Valid starting position minus classified finishing position |
-| Win rate | Wins divided by race starts |
-| Driver podium rate | Individual podiums divided by driver starts |
-| Constructor podium race rate | Races with at least one podium divided by constructor race starts |
-| YoY change | Difference between consecutive season metrics |
+| Race entry | One recorded driver result |
+| Driver start | Race entry not marked as DNS |
+| Constructor appearance | Distinct race with a recorded constructor result |
+| Constructor start | Distinct race with at least one driver starting |
+| Average points per start | Average points across driver starts |
+| Average constructor points per race | Total points divided by distinct race appearances |
+| Average finish | Average classified finishing position |
+| Positions gained | Valid grid position minus classified finish |
+| Win rate | Wins divided by starts |
+| Driver podium rate | Podiums divided by driver starts |
+| Constructor podium race rate | Races with a podium divided by constructor starts |
+| YoY change | Difference between consecutive seasons |
 
-Undefined averages and ratios are represented by NULL values rather than artificial zero values.
+Undefined averages and ratios are represented by NULL values.
 
-## 9. SQL Techniques
+## 7. SQL Techniques
 
-The analytics implementation demonstrates the following SQL techniques:
+- INNER JOIN
+- GROUP BY
+- Common Table Expressions
+- ROW_NUMBER window function
+- LAG window function
+- COUNT DISTINCT
+- COUNT_IF
+- CASE WHEN
+- TRY_DIVIDE
+- UNION ALL
+- Null-safe equality
+- CREATE OR REPLACE VIEW
 
-| Technique | Application |
-|---|---|
-| INNER JOIN | Combining fact and dimension tables |
-| GROUP BY | Business metric aggregation |
-| Common Table Expressions | Structuring analytical queries |
-| ROW_NUMBER | Ranking and recent race selection |
-| LAG | Previous-season comparisons |
-| COUNT DISTINCT | Counting unique races and drivers |
-| COUNT_IF | Conditional metric aggregation |
-| CASE WHEN | Business rules and conditional calculations |
-| TRY_DIVIDE | Safe division |
-| UNION ALL | Consolidated view validation |
-| Null-safe equality | Validation involving nullable values |
-| CREATE OR REPLACE VIEW | Repeatable analytical view deployment |
+## 8. Data Quality Checks
 
-## 10. Data Quality and Validation
+### Business Key Uniqueness
 
-The SQL notebook includes validation queries covering:
+```sql
+SELECT
+    race_id,
+    driver_id,
+    COUNT(*) AS record_count
+FROM f1_lakehouse.analytics.vw_race_results
+GROUP BY race_id, driver_id
+HAVING COUNT(*) > 1;
+```
 
-- Analytical view availability.
-- Record count and race point reconciliation.
-- Business key uniqueness.
-- Ranking sequence consistency.
-- Business metric ranges.
-- Race entry and start consistency.
-- Win and podium consistency.
-- Positions gained reconciliation.
-- Year-over-year calculation rules.
+Expected result: zero rows.
 
-Validation queries return PASSED or FAILED statuses for manual inspection.
+### Record Count and Points Reconciliation
 
-Automated data quality testing will be implemented in F09.
+```sql
+SELECT
+    'Gold' AS layer,
+    COUNT(*) AS records,
+    SUM(points) AS total_points
+FROM f1_lakehouse.gold.fact_race_results
 
-## 11. Manual Business Validation
+UNION ALL
 
-A manual reconciliation example compares Max Verstappen's Silverstone race results directly from the Gold tables with the aggregated driver circuit performance view.
+SELECT
+    'Analytics',
+    COUNT(*),
+    SUM(points)
+FROM f1_lakehouse.analytics.vw_race_results;
+```
 
-The comparison covers race starts, total points, average points per start, average finishing position, wins and podiums.
+Expected results for the original dataset:
 
-## 12. Execution Instructions
+| Layer | Records | Total points |
+|---|---:|---:|
+| Gold | 2,278 | 11,540.50 |
+| Analytics | 2,278 | 11,540.50 |
 
-Source file: `sql/04_sql_business_analytics.sql`
+### Invalid Points
 
-1. Ensure that the Gold dimensional model exists.
-2. Import the SQL source into Azure Databricks.
-3. Select a compatible compute environment.
-4. Execute the notebook cells in order.
-5. Verify all six analytical views.
-6. Review validation query results.
+```sql
+SELECT COUNT(*) AS invalid_records
+FROM f1_lakehouse.analytics.vw_race_results
+WHERE points IS NULL OR points < 0;
+```
 
-CREATE OR REPLACE VIEW statements support repeatable deployment.
+Expected result: 0.
 
-## 13. Design Decisions and Limitations
+Additional validation queries in the SQL source cover ranking consistency, metric ranges, race start consistency, positions gained reconciliation and year-over-year calculations.
 
-- Standard SQL views are used instead of materialized views.
-- Business logic is centralized in reusable analytical views.
-- Rankings include sample-size thresholds.
-- Ranking metrics are rounded to two decimal places.
-- Race status definitions are inherited from Silver.
-- Constructor identities follow source system identifiers.
-- Sprint results and qualifying data are excluded.
-- Historical results do not isolate driver ability from car performance.
-- Validation queries currently require manual inspection.
-- Dynamic dashboard filtering will be implemented in F10.
+SQL validation results require manual inspection where explicit failure enforcement is not implemented.
 
-## 14. Next Steps
+## 9. Dashboard Integration
 
-- F08: End-to-end pipeline orchestration.
-- F09: Automated data quality tests and basic CI.
-- F10: Streamlit dashboard.
-- F11: Portfolio documentation.
+The Streamlit dashboard consumes a manually exported Parquet snapshot of `vw_race_results`.
+
+Interactive filtering and KPI calculations are performed locally using Pandas.
+
+The dashboard constructor analysis represents the selected driver's performance with each constructor. The SQL constructor circuit view represents aggregated constructor performance across drivers.
+
+These analytical perspectives should not be treated as identical.
+
+## 10. Execution
+
+Source file:
+
+[04_sql_business_analytics.sql](../sql/04_sql_business_analytics.sql)
+
+Ensure that the Gold tables exist, import the SQL source into Databricks and execute the notebook cells in order.
+
+The end-to-end Databricks Job also deploys the analytical views.
+
+## 11. Limitations
+
+- Historical Grand Prix race results only.
+- Sprint and qualifying results are excluded.
+- Historical constructor identities follow source identifiers.
+- Ranking results depend on sample size.
+- Driver ability cannot be isolated from car performance.
+- SQL validation queries do not all enforce automatic failure.
+- The dashboard snapshot is refreshed manually.
+
+## 12. Related Documentation
+
+- [Solution Architecture](architecture.md)
+- [Gold Dimensional Model](gold_dimensional_model.md)
+- [Data Quality and CI](data_quality_and_ci.md)
+- [Dashboard Documentation](../dashboard/README.md)
+- [Setup and Reproducibility](setup.md)
