@@ -29,7 +29,7 @@
       ],
       "run_if": "ALL_SUCCESS",
       "notebook_task": {
-        "notebook_path": "<WORKSPACE_NOTEBOOK_ROOT>/02_bronze_to_silver",
+        "notebook_path": "<WORKSPACE_GIT_ROOT>/notebooks/02_bronze_to_silver",
         "source": "WORKSPACE"
       },
       "timeout_seconds": 0,
