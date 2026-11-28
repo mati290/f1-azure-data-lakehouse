@@ -63,6 +63,20 @@ def apply_chart_layout(
         nticks=15,
     )
 
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        title_font_size=18,
+        hoverlabel=dict(
+            bgcolor="#1A1F2B",
+            font_color="#FAFAFA",
+        ),
+    )
+
+    fig.update_yaxes(
+        gridcolor="rgba(148,163,184,0.15)",
+        zeroline=False,
+    )
     return fig
 
 
@@ -250,5 +264,20 @@ def create_summary_chart(
     )
 
     fig.update_xaxes(rangemode="tozero")
+
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        title_font_size=18,
+        hoverlabel=dict(
+            bgcolor="#1A1F2B",
+            font_color="#FAFAFA",
+        ),
+    )
+
+    fig.update_xaxes(
+        gridcolor="rgba(148,163,184,0.15)",
+        zeroline=False,
+    )
 
     return fig

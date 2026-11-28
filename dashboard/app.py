@@ -8,6 +8,7 @@ from charts import (
     create_summary_chart,
 )
 
+from styles import apply_dashboard_styles
 import streamlit as st
 
 from analytics import (
@@ -25,9 +26,13 @@ st.set_page_config(
     page_title="F1 Performance Analytics",
     page_icon="🏎️",
     layout="wide",
+    initial_sidebar_state="expanded"
 )
+apply_dashboard_styles()
 
 st.title("🏎️ F1 Performance Analytics")
+
+st.markdown("**Historical race performance dashboard**")
 
 try:
     with st.spinner("Loading Gold analytics snapshot..."):
@@ -42,6 +47,13 @@ st.caption(
     f"{metadata['season_from']}–{metadata['season_to']}"
 )
 
+st.sidebar.title("🏁 F1 Analytics")
+
+st.sidebar.caption(
+    "Azure Data Lakehouse | Gold Analytics"
+)
+
+st.sidebar.divider()
 
 # Sidebar filters
 
@@ -64,6 +76,50 @@ selected_driver = st.sidebar.selectbox(
     index=default_driver_index,
     format_func=lambda value: drivers[value],
 )
+
+with st.sidebar.expander("About this project"):
+    st.markdown(
+        """
+        An end-to-end Data Engineering portfolio project.
+
+        **Technology stack**
+
+        - Azure Data Factory
+        - Azure Data Lake Storage Gen2
+        - Azure Databricks
+        - PySpark & Delta Lake
+        - SQL Analytics
+        - Streamlit & Plotly
+
+        **Data source:** Jolpica F1 API
+
+        [GitHub Repository](https://github.com/mati290/f1-azure-data-lakehouse)
+        """
+    )
+
+    st.caption(
+        "Unofficial, non-commercial educational project."
+    )
+
+with st.sidebar.expander("Dataset information"):
+    st.write(
+        f"Seasons: {metadata['season_from']}"
+        f"–{metadata['season_to']}"
+    )
+
+    st.write(f"Race results: {len(df):,}")
+    st.write(f"Drivers: {df['driver_id'].nunique()}")
+    st.write(f"Races: {df['race_id'].nunique()}")
+
+    st.caption(
+        f"Snapshot exported: "
+        f"{metadata['exported_at_utc']}"
+    )
+
+    st.markdown(
+        "[Data license – CC BY-NC-SA 4.0]"
+        "(https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+    )
 
 selected_circuit = st.sidebar.selectbox(
     "Circuit",
